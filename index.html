@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>会員番号お問い合わせ</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background:
+        linear-gradient(rgba(0,0,0,0.78), rgba(0,0,0,0.9)),
+        url("gym-bg.jpg");
+      background-size: cover;
+      background-position: center;
+      color: #fff;
+      font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 48px 20px;
+    }
+
+    .card {
+      background: rgba(10, 10, 10, 0.88);
+      border: 1px solid rgba(141,255,0,0.28);
+      border-radius: 24px;
+      padding: 30px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+      backdrop-filter: blur(6px);
+    }
+
+    .logo {
+      text-align: center;
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      color: #8dff00;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    h1 {
+      font-size: 25px;
+      margin: 0 0 10px;
+      text-align: center;
+      color: #fff;
+    }
+
+    .en-title {
+      text-align: center;
+      font-size: 12px;
+      color: #8dff00;
+      letter-spacing: 0.12em;
+      margin-bottom: 22px;
+    }
+
+    .lead {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #ddd;
+      margin-bottom: 26px;
+      text-align: center;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #ccc;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.96);
+      color: #111;
+      font-size: 16px;
+      margin-bottom: 18px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #8dff00;
+      box-shadow: 0 0 0 3px rgba(141,255,0,0.22);
+    }
+
+    button {
+      width: 100%;
+      padding: 17px;
+      border-radius: 999px;
+      border: none;
+      background: #8dff00;
+      color: #000;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(141,255,0,0.25);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .message {
+      margin-top: 20px;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.7;
+      display: none;
+      white-space: pre-line;
+    }
+
+    .success {
+      display: block;
+      background: rgba(141,255,0,0.12);
+      color: #baff55;
+      border: 1px solid rgba(141,255,0,0.38);
+    }
+
+    .error {
+      display: block;
+      background: rgba(255,70,70,0.12);
+      color: #ff9b9b;
+      border: 1px solid rgba(255,70,70,0.38);
+    }
+
+    .note {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.7;
+    }
+
+    .footer {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 11px;
+      color: #777;
+      letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="logo">THE FOREST GYM</div>
+
+      <h1>会員番号お問い合わせ</h1>
+      <div class="en-title">MEMBER NUMBER INQUIRY</div>
+
+      <div class="lead">
+        ご登録メールアドレスを入力してください。<br>
+        会員番号をメールでお送りします。
+      </div>
+
+      <label for="email">メールアドレス / Email Address</label>
+      <input id="email" type="email" placeholder="example@email.com" autocomplete="email">
+
+      <button id="submitBtn" onclick="submitForm()">送信する</button>
+
+      <div id="message" class="message"></div>
+
+      <div class="note">
+        ※登録メールアドレスとは、決済連絡等を受信しているメールアドレスです。<br>
+        ※未登録のメールアドレスには会員番号は送信されません。<br>
+        ※会員番号は画面には表示されません。
+      </div>
+    </div>
+
+    <div class="footer">THE FOREST GYM</div>
+  </div>
+
+  <script>
+    const GAS_API_URL = "ここにGASのウェブアプリURL";
+
+    function submitForm() {
+      const email = document.getElementById("email").value.trim();
+      const btn = document.getElementById("submitBtn");
+      const msg = document.getElementById("message");
+
+      msg.className = "message";
+      msg.textContent = "";
+
+      if (!email) {
+        msg.textContent = "メールアドレスを入力してください。";
+        msg.className = "message error";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "送信中...";
+
+      const callbackName = "callback_" + Date.now();
+
+      window[callbackName] = function(res) {
+        btn.disabled = false;
+        btn.textContent = "送信する";
+
+        msg.textContent = res.message || "処理が完了しました。";
+
+        if (res.ok) {
+          msg.className = "message success";
+        } else {
+          msg.className = "message error";
+        }
+
+        delete window[callbackName];
+
+        const oldScript = document.getElementById(callbackName);
+        if (oldScript) {
+          oldScript.remove();
+        }
+      };
+
+      const url =
+        GAS_API_URL +
+        "?action=sendMemberNo" +
+        "&email=" + encodeURIComponent(email) +
+        "&callback=" + encodeURIComponent(callbackName) +
+        "&t=" + Date.now();
+
+      const script = document.createElement("script");
+      script.id = callbackName;
+      script.src = url;
+
+      script.onerror = function() {
+        btn.disabled = false;
+        btn.textContent = "送信する";
+
+        msg.textContent = "通信エラーが発生しました。時間をおいて再度お試しください。";
+        msg.className = "message error";
+
+        delete window[callbackName];
+        script.remove();
+      };
+
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html>
