@@ -92,17 +92,17 @@
       box-shadow: 0 0 0 3px rgba(141,255,0,0.22);
     }
 
-   button {
-  width: 100%;
-  padding: 17px;
-  border-radius: 999px;
-  border: none;
-  background: #00c853;  /* ←ここ変更（濃い緑） */
-  color: #fff;          /* ←白文字に変更 */
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-}
+    button {
+      width: 100%;
+      padding: 17px;
+      border-radius: 999px;
+      border: none;
+      background: #00c853;
+      color: #fff;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
 
     button:disabled {
       opacity: 0.55;
@@ -166,9 +166,9 @@
       <label for="email">メールアドレス / Email Address</label>
       <input id="email" type="email" placeholder="example@email.com" autocomplete="email">
 
-      <button id="submitBtn" onclick="submitForm()">送信する</button>
+      <button id="submitBtn" type="button" onclick="submitForm()">送信する</button>
 
-      <div id="message" class="message"></div>
+      <div id="message" class="message" aria-live="polite"></div>
 
       <div class="note">
         ※登録メールアドレスとは、決済連絡等を受信しているメールアドレスです。<br>
@@ -182,69 +182,142 @@
 
   <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxuC-MipmiaYvMuid0pH6hT_kgO0ZTW4XB-xZ4LbY65lDm6pfTnLTPLAF4SC-UYYAa4/exec";
+    const REQUEST_TIMEOUT_MS = 15000;
 
-    function submitForm() {
-      const email = document.getElementById("email").value.trim();
+    const emailInput = document.getElementById("email");
+    emailInput.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submitForm();
+      }
+    });
+
+    function setLoading(isLoading) {
       const btn = document.getElementById("submitBtn");
-      const msg = document.getElementById("message");
+      btn.disabled = isLoading;
+      btn.textContent = isLoading ? "送信中..." : "送信する";
+    }
 
+    function showMessage(text, ok) {
+      const msg = document.getElementById("message");
+      msg.textContent = text;
+      msg.className = "message " + (ok ? "success" : "error");
+    }
+
+    function normalizeResult(res) {
+      if (!res || typeof res !== "object") {
+        throw new Error("Invalid response");
+      }
+      return {
+        ok: Boolean(res.ok),
+        message: res.message || (res.ok ? "送信しました。メールをご確認ください。" : "処理に失敗しました。")
+      };
+    }
+
+    async function requestWithFetch(email) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      const url = new URL(GAS_API_URL);
+      url.searchParams.set("action", "sendMemberNo");
+      url.searchParams.set("email", email);
+      url.searchParams.set("t", Date.now().toString());
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          redirect: "follow",
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const text = await response.text();
+        return normalizeResult(JSON.parse(text));
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function requestWithJsonp(email) {
+      return new Promise((resolve, reject) => {
+        const callbackName = "memberNoCallback_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+        const script = document.createElement("script");
+        let finished = false;
+
+        const cleanup = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          delete window[callbackName];
+          script.remove();
+        };
+
+        window[callbackName] = function(res) {
+          try {
+            const result = normalizeResult(res);
+            cleanup();
+            resolve(result);
+          } catch (error) {
+            cleanup();
+            reject(error);
+          }
+        };
+
+        const url = new URL(GAS_API_URL);
+        url.searchParams.set("action", "sendMemberNo");
+        url.searchParams.set("email", email);
+        url.searchParams.set("callback", callbackName);
+        url.searchParams.set("t", Date.now().toString());
+
+        script.src = url.toString();
+        script.async = true;
+        script.onerror = function() {
+          cleanup();
+          reject(new Error("JSONP request failed"));
+        };
+
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error("JSONP request timed out"));
+        }, REQUEST_TIMEOUT_MS);
+
+        document.body.appendChild(script);
+      });
+    }
+
+    async function submitForm() {
+      const email = emailInput.value.trim();
+      const msg = document.getElementById("message");
       msg.className = "message";
       msg.textContent = "";
 
       if (!email) {
-        msg.textContent = "メールアドレスを入力してください。";
-        msg.className = "message error";
+        showMessage("メールアドレスを入力してください。", false);
         return;
       }
 
-      btn.disabled = true;
-      btn.textContent = "送信中...";
+      if (!emailInput.checkValidity()) {
+        showMessage("メールアドレスの形式をご確認ください。", false);
+        return;
+      }
 
-      const callbackName = "callback_" + Date.now();
+      setLoading(true);
 
-      window[callbackName] = function(res) {
-        btn.disabled = false;
-        btn.textContent = "送信する";
-
-        msg.textContent = res.message || "処理が完了しました。";
-
-        if (res.ok) {
-          msg.className = "message success";
-        } else {
-          msg.className = "message error";
+      try {
+        let result;
+        try {
+          result = await requestWithFetch(email);
+        } catch (fetchError) {
+          result = await requestWithJsonp(email);
         }
 
-        delete window[callbackName];
-
-        const oldScript = document.getElementById(callbackName);
-        if (oldScript) {
-          oldScript.remove();
-        }
-      };
-
-      const url =
-        GAS_API_URL +
-        "?action=sendMemberNo" +
-        "&email=" + encodeURIComponent(email) +
-        "&callback=" + encodeURIComponent(callbackName) +
-        "&t=" + Date.now();
-
-      const script = document.createElement("script");
-      script.id = callbackName;
-      script.src = url;
-
-      script.onerror = function() {
-        btn.disabled = false;
-        btn.textContent = "送信する";
-
-        msg.textContent = "通信エラーが発生しました。時間をおいて再度お試しください。";
-        msg.className = "message error";
-
-        delete window[callbackName];
-        script.remove();
-      };
-
-      document.body.appendChild(script);
+        showMessage(result.message, result.ok);
+        if (result.ok) emailInput.value = "";
+      } catch (error) {
+        console.error("Member number inquiry failed:", error);
+        showMessage("通信エラーが発生しました。時間をおいて再度お試しください。", false);
+      } finally {
+        setLoading(false);
+      }
     }
   </script>
 </body>
